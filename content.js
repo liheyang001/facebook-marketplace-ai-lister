@@ -1,148 +1,311 @@
-// Content Script - 注入到 Facebook Marketplace 创建列表页面
+// Content Script - Facebook Marketplace AI Lister
 
-// 监听来自 popup 的消息
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'autofill') {
-    autofillForm(request.data)
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch((error) => {
-        sendResponse({ success: false, error: error.message });
-      });
+// 防止重复注入时执行多次
+if (window.__aiListerInjected) {
+  // 已注入，只更新消息监听器
+} else {
+  window.__aiListerInjected = true;
 
-    return true; // 保持 channel 开放
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'autofill') {
+      autofillForm(request.data, request.images || [])
+        .then(() => sendResponse({ success: true }))
+        .catch((error) => sendResponse({ success: false, error: error.message }));
+      return true;
+    }
+  });
+
+  console.log('🚀 AI Lister content script ready');
+}
+
+// ============ 主填充流程 ============
+async function autofillForm(data, images) {
+  const banner = showBanner('⏳ Filling form... Please do not touch the page.');
+  await sleep(500);
+
+  // 0. 上传图片
+  if (images.length > 0) {
+    await uploadImages(images);
+    await sleep(1000);
   }
-});
 
-// 自动填充函数
-async function autofillForm(data) {
-  try {
-    // 等待一下确保 DOM 完全加载
-    await new Promise(resolve => setTimeout(resolve, 500));
+  // 1. Title
+  const titleEl = findInputByLabel('Title');
+  if (titleEl) {
+    await fillReactInput(titleEl, data.title);
+    await sleep(300);
+  }
 
-    // 填充标题
-    fillField('title', data.title);
+  // 2. Price
+  const priceEl = findInputByLabel('Price');
+  if (priceEl) {
+    await fillReactInput(priceEl, String(data.priceRange.min));
+    await sleep(300);
+  }
 
-    // 填充价格（使用最低价格）
-    fillField('price', String(data.priceRange.min));
+  // 3. Category
+  if (data.category) {
+    await selectDropdown('Category', data.category);
+    await sleep(600);
+  }
 
-    // 填充描述
-    fillField('description', data.description.join('\n'));
+  // 4. Condition
+  if (data.condition) {
+    await selectDropdown('Condition', data.condition);
+    await sleep(600);
+  }
 
-    // 填充类别
-    selectCategory(data.category);
+  // 5. More details（Description + Brand）
+  await fillMoreDetails(data);
 
-    console.log('✅ 表单填充完成');
-  } catch (error) {
-    console.error('填充失败:', error);
-    throw new Error('填充表单时出错');
+  banner.done('✅ Form filled! Please review and submit.');
+
+  if (!titleEl && !priceEl) {
+    throw new Error('No form fields found. Please refresh the Facebook page and retry.');
   }
 }
 
-// 通用字段填充函数
-function fillField(fieldType, value) {
-  let input = null;
+// ============ 图片上传 ============
+async function uploadImages(base64Images) {
+  const allInputs = Array.from(document.querySelectorAll('input[type="file"]'));
 
-  switch (fieldType) {
-    case 'title':
-      // 尝试多种方式定位标题字段
-      input = document.querySelector('input[aria-label="Title"]') ||
-              document.querySelector('input[placeholder*="title" i]') ||
-              document.querySelector('input[placeholder*="product name" i]');
-      break;
+  // 找第一个真正可见的 file input
+  const fileInput = allInputs.find(el => {
+    let parent = el.parentElement;
+    while (parent) {
+      const style = window.getComputedStyle(parent);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      parent = parent.parentElement;
+    }
+    return true;
+  }) || allInputs[0];
 
-    case 'price':
-      // 尝试多种方式定位价格字段
-      input = document.querySelector('input[aria-label*="price" i]') ||
-              document.querySelector('input[placeholder*="price" i]') ||
-              document.querySelector('input[aria-label*="Price" i]');
-      break;
-
-    case 'description':
-      // 尝试多种方式定位描述字段
-      input = document.querySelector('textarea[aria-label*="description" i]') ||
-              document.querySelector('textarea[placeholder*="description" i]') ||
-              document.querySelector('textarea');
-      break;
+  if (!fileInput) {
+    console.warn('⚠️ File input not found');
+    return;
   }
 
-  if (input) {
+  try {
+    const files = await Promise.all(base64Images.map(async (base64, i) => {
+      const res = await fetch(base64);
+      const blob = await res.blob();
+      const ext = blob.type.split('/')[1] || 'jpg';
+      return new File([blob], `photo_${i + 1}.${ext}`, { type: blob.type });
+    }));
+
+    const dt = new DataTransfer();
+    files.forEach(f => dt.items.add(f));
+    fileInput.files = dt.files;
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+    console.log(`✅ Uploaded ${files.length} photo(s)`);
+  } catch (e) {
+    console.warn('⚠️ Image upload failed:', e.message);
+  }
+}
+
+// ============ 通过 label 找 input ============
+function findInputByLabel(labelText) {
+  const label = Array.from(document.querySelectorAll('label'))
+    .find(l => l.textContent.trim() === labelText);
+  if (!label) return null;
+
+  if (label.htmlFor) {
+    const el = document.getElementById(label.htmlFor);
+    if (el) return el;
+  }
+
+  const inner = label.querySelector('input, textarea');
+  if (inner) return inner;
+
+  let sibling = label.nextElementSibling;
+  while (sibling) {
+    const el = sibling.matches('input, textarea')
+      ? sibling
+      : sibling.querySelector('input, textarea');
+    if (el) return el;
+    sibling = sibling.nextElementSibling;
+  }
+
+  const parent = label.parentElement;
+  if (parent) {
+    const inputs = parent.querySelectorAll('input, textarea');
+    if (inputs.length > 0) return inputs[0];
+  }
+
+  return null;
+}
+
+// ============ 下拉选择 ============
+async function selectDropdown(labelText, value) {
+  const label = Array.from(document.querySelectorAll('label'))
+    .find(l => l.textContent.trim().startsWith(labelText));
+  if (!label) return;
+
+  // Build candidates by walking up the DOM tree up to 4 levels
+  const candidates = [];
+  const addIfNew = (el) => { if (el && !candidates.includes(el)) candidates.push(el); };
+
+  addIfNew(label.querySelector('[role="combobox"],[role="button"],button'));
+  addIfNew(label.closest('[role="combobox"],[role="button"]'));
+
+  let node = label.parentElement;
+  for (let i = 0; i < 4; i++) {
+    if (!node) break;
+    const found = node.querySelector('[role="combobox"],[role="button"],button,[tabindex="0"]');
+    if (found && found !== label) addIfNew(found);
+    node = node.parentElement;
+  }
+  addIfNew(label);
+
+  let opened = false;
+  for (const el of candidates) {
+    el.click();
+    await sleep(900);
+    if (getDropdownOptions().length > 0) { opened = true; break; }
+  }
+
+  if (!opened) return;
+
+  const matched = await clickMatchingOption(value);
+  if (!matched) {
+    document.body.click();
+    await sleep(200);
+  }
+}
+
+function getDropdownOptions() {
+  // Standard ARIA roles
+  const byRole = Array.from(
+    document.querySelectorAll('[role="option"],[role="menuitem"],[role="radio"]')
+  );
+  if (byRole.length > 0) return byRole;
+
+  // Items inside a dialog, listbox, or menu overlay
+  const overlay = document.querySelector('[role="dialog"],[role="listbox"],[role="menu"]');
+  if (overlay) {
+    const items = Array.from(
+      overlay.querySelectorAll('[role="option"],[role="menuitem"],[role="radio"],[role="button"],li')
+    ).filter(el => el.textContent.trim().length > 0 && el.textContent.trim().length < 80);
+    if (items.length > 0) return items;
+  }
+
+  return [];
+}
+
+async function clickMatchingOption(value) {
+  const options = getDropdownOptions();
+  const valueLower = value.toLowerCase();
+
+  for (const opt of options) {
+    const text = opt.textContent.trim();
+    if (!text || text.length > 80) continue;
+    const textLower = text.toLowerCase();
+
+    if (
+      textLower === valueLower ||
+      textLower.includes(valueLower) ||
+      valueLower.includes(textLower) ||
+      valueLower.split(/[\s\-]+/).some(w => w.length > 2 && textLower.includes(w))
+    ) {
+      opt.click();
+      console.log(`✅ Selected: ${text}`);
+      await sleep(300);
+      return true;
+    }
+  }
+  return false;
+}
+
+// ============ More details（Description + Brand）============
+async function fillMoreDetails(data) {
+  const descText = Array.isArray(data.description) ? data.description.join('\n') : '';
+  const brand = data.brand || null;
+
+  // 先滚动 + 尝试点击 "More details"
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  await sleep(600);
+
+  const moreBtn = Array.from(
+    document.querySelectorAll('[role="button"],button,div,span')
+  ).find(el => /more detail/i.test(el.textContent.trim()) && el.children.length < 5);
+
+  if (moreBtn) {
+    moreBtn.click();
+    await sleep(800);
+  }
+
+  // 填 Description
+  let descEl = null;
+  for (let i = 0; i < 6; i++) {
+    descEl = document.querySelector('textarea') || findInputByLabel('Description');
+    if (descEl) break;
+    await sleep(400);
+  }
+  if (descEl && descText) {
+    await fillReactInput(descEl, descText);
+    await sleep(300);
+  }
+
+  // 填 Brand
+  if (brand) {
+    const brandEl = findInputByLabel('Brand') || findInputByLabel('brand');
+    if (brandEl) {
+      await fillReactInput(brandEl, brand);
+      console.log(`✅ Filled Brand: ${brand}`);
+    }
+  }
+}
+
+// ============ React 兼容填充 ============
+function fillReactInput(el, value) {
+  return new Promise((resolve, reject) => {
+    if (!el) { reject(new Error('Element is null')); return; }
     try {
-      // 设置值
-      input.focus();
-      input.value = value;
-
-      // 触发 change 事件，让 React 检测到更改
-      const changeEvent = new Event('change', { bubbles: true });
-      input.dispatchEvent(changeEvent);
-
-      // 触发 input 事件
-      const inputEvent = new Event('input', { bubbles: true });
-      input.dispatchEvent(inputEvent);
-
-      // 触发 blur 事件（有时需要）
-      const blurEvent = new Event('blur', { bubbles: true });
-      input.dispatchEvent(blurEvent);
-
-      console.log(`✅ 已填充 ${fieldType}: ${value.substring(0, 50)}`);
-    } catch (error) {
-      console.error(`填充 ${fieldType} 失败:`, error);
-      throw new Error(`无法填充${fieldType}字段`);
+      const proto = el.tagName === 'TEXTAREA'
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype;
+      const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+      nativeSetter.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      el.blur();
+      console.log(`✅ Filled: ${value.substring(0, 40)}`);
+      resolve();
+    } catch (e) {
+      reject(e);
     }
-  } else {
-    console.warn(`⚠️ 未找到 ${fieldType} 字段`);
-    throw new Error(`找不到${fieldType}字段，请确保在创建列表页面使用`);
-  }
+  });
 }
 
-// 类别选择函数
-function selectCategory(category) {
-  try {
-    // Facebook 的类别选择通常是 select 或 button
-    const selectElement = document.querySelector('select[aria-label*="category" i]');
+// ============ Banner 提示 ============
+function showBanner(message) {
+  const existing = document.getElementById('__ai_lister_banner__');
+  if (existing) existing.remove();
 
-    if (selectElement) {
-      // 尝试找到匹配的选项
-      const options = selectElement.querySelectorAll('option');
-      let found = false;
+  const banner = document.createElement('div');
+  banner.id = '__ai_lister_banner__';
+  banner.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; z-index: 999999;
+    background: #667eea; color: white;
+    padding: 14px 20px; text-align: center;
+    font-size: 15px; font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    pointer-events: none;
+  `;
+  banner.textContent = message;
+  document.body.appendChild(banner);
 
-      for (const option of options) {
-        if (option.textContent.toLowerCase().includes(category.toLowerCase())) {
-          selectElement.value = option.value;
-          selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-          console.log(`✅ 已选择类别: ${option.textContent}`);
-          found = true;
-          break;
-        }
-      }
-
-      if (!found) {
-        console.warn(`⚠️ 未找到匹配的类别: ${category}`);
-      }
-    } else {
-      console.warn('⚠️ 未找到类别选择元素，可能需要手动选择');
+  return {
+    done(msg) {
+      banner.style.background = '#10b981';
+      banner.textContent = msg;
+      setTimeout(() => banner.remove(), 3000);
     }
-  } catch (error) {
-    console.error('选择类别失败:', error);
-    // 不抛出错误，类别选择不是必须的
-  }
+  };
 }
 
-// 页面加载时的初始化
-console.log('🚀 Facebook Marketplace AI Lister Content Script 已注入');
-
-// 监听 DOM 变化，以防 Facebook 改变了页面结构
-const observer = new MutationObserver(() => {
-  // 可以在这里添加监听逻辑，比如检测页面是否重新加载
-});
-
-observer.observe(document.body, {
-  childList: true,
-  subtree: true
-});
-
-// 清理
-window.addEventListener('unload', () => {
-  observer.disconnect();
-});
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
