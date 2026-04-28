@@ -1,0 +1,28 @@
+/* Content Script 样式隔离 */
+/* 这个文件确保我们的代码不会与 Facebook 的样式冲突 */
+
+/* 如果需要在 Facebook 页面上显示通知，可以在这里添加样式 */
+.ai-lister-notification {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  background: #10b981;
+  color: white;
+  border-radius: 6px;
+  font-size: 14px;
+  z-index: 10000;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  animation: slideInUp 0.3s ease;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
