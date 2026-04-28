@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,135 +9,143 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>🤖 AI 列表助手</h1>
+      <h1>🤖 AI Listing Assistant</h1>
       <p class="version">v1.0</p>
     </div>
 
-    <!-- API 密钥设置 -->
+    <!-- Settings -->
     <div class="settings-section" id="settings-section">
       <div class="settings-header" id="settings-toggle">
-        <span>⚙️ 设置</span>
+        <span>⚙️ Settings</span>
         <span id="settings-arrow">▼</span>
       </div>
       <div class="settings-body" id="settings-body" style="display: none;">
         <div class="setting-item">
-          <label for="api-key">🔑 Gemini API 密钥：</label>
+          <label for="api-key">🔑 Gemini API Key:</label>
           <div class="setting-input-group">
             <input
               type="password"
               id="api-key"
-              placeholder="输入你的 Gemini API 密钥"
+              placeholder="Enter your Gemini API key"
               class="setting-input"
             >
-            <button id="toggle-key-visibility" class="btn-icon" title="显示/隐藏密钥">👁️</button>
+            <button id="toggle-key-visibility" class="btn-icon" title="Show/Hide key">👁️</button>
           </div>
           <p class="setting-hint">
-            免费获取：<a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
+            Get free key: <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
           </p>
         </div>
 
         <div class="setting-item">
-          <label for="location">📍 你的地区：</label>
+          <label for="location">📍 Your Region:</label>
           <div class="setting-input-group">
             <input
               type="text"
               id="location"
-              placeholder="输入你的城市/地区（如：北京、纽约）"
+              placeholder="City or region (e.g. New York, London)"
               class="setting-input"
             >
           </div>
         </div>
 
-        <button id="save-settings" class="btn-primary">💾 保存设置</button>
+        <div class="setting-item">
+          <label for="language">🌐 Output Language:</label>
+          <div class="setting-input-group">
+            <select id="language" class="setting-input">
+              <option value="en">English</option>
+              <option value="zh">Chinese (中文)</option>
+              <option value="es">Spanish (Español)</option>
+              <option value="fr">French (Français)</option>
+              <option value="ja">Japanese (日本語)</option>
+              <option value="ko">Korean (한국어)</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="save-settings" class="btn-primary">💾 Save Settings</button>
         <p id="settings-status" class="settings-status"></p>
       </div>
     </div>
 
-    <!-- 当前设置状态显示 -->
+    <!-- Status bar -->
     <div id="status-bar" class="status-bar">
-      <span id="location-display">📍 未设置地区</span>
-      <span id="api-key-status">🔑 未配置</span>
+      <span id="location-display">📍 No region set</span>
+      <span id="api-key-status">🔑 Not configured</span>
     </div>
 
-    <!-- 图片上传部分 -->
+    <!-- Image upload -->
     <div class="upload-section">
-      <label for="image-input">📸 选择商品图片：</label>
+      <label>📸 Select product photos (up to 5):</label>
       <div class="image-input-group">
         <input
           type="file"
           id="image-input"
           accept="image/jpeg,image/png,image/webp"
+          multiple
           style="display: none"
         >
-        <button id="select-image-btn" class="btn-primary">选择图片</button>
+        <button id="select-image-btn" class="btn-primary">Choose Photos</button>
       </div>
-
-      <!-- 图片预览 -->
-      <div id="image-preview-container" class="preview-container" style="display: none;">
-        <img id="image-preview" alt="图片预览">
-        <button id="clear-image-btn" class="btn-clear">清除</button>
-      </div>
+      <div id="image-preview-container" class="preview-grid" style="display: none;"></div>
     </div>
 
-    <!-- 分析按钮 -->
+    <!-- Analyze button -->
     <div class="action-section">
       <button id="analyze-btn" class="btn-primary btn-large" disabled>
-        🔍 分析商品
+        🔍 Analyze Product
       </button>
     </div>
 
-    <!-- 结果显示 -->
+    <!-- Result -->
     <div id="result-container" class="result-container" style="display: none;">
       <div class="result-card">
-        <h3>📋 AI 生成的列表信息</h3>
+        <h3>📋 AI Generated Listing</h3>
 
         <div class="result-field">
-          <label>标题：</label>
+          <label>Title:</label>
           <p id="result-title" class="result-value"></p>
         </div>
 
         <div class="result-field">
-          <label>价格范围：</label>
+          <label>Price Range:</label>
           <p id="result-price" class="result-value"></p>
         </div>
 
         <div class="result-field">
-          <label>描述：</label>
+          <label>Description:</label>
           <p id="result-description" class="result-value"></p>
         </div>
 
         <div class="result-field">
-          <label>类别：</label>
+          <label>Category / Condition:</label>
           <p id="result-category" class="result-value"></p>
         </div>
 
         <div class="result-actions">
-          <button id="autofill-btn" class="btn-success">✅ 自动填充表单</button>
-          <button id="new-analysis-btn" class="btn-secondary">分析其他商品</button>
+          <button id="autofill-btn" class="btn-success">✅ Autofill Form</button>
+          <button id="new-analysis-btn" class="btn-secondary">New Analysis</button>
         </div>
       </div>
     </div>
 
-    <!-- 加载动画 -->
+    <!-- Loading -->
     <div id="loading-container" class="loading-container" style="display: none;">
       <div class="spinner"></div>
-      <p>正在分析商品...</p>
+      <p>Analyzing product...</p>
     </div>
 
-    <!-- 错误提示 -->
+    <!-- Error -->
     <div id="error-container" class="error-container" style="display: none;">
       <p id="error-message"></p>
-      <button id="retry-btn" class="btn-secondary">重试</button>
+      <button id="retry-btn" class="btn-secondary">Retry</button>
     </div>
 
-    <!-- 成功提示 -->
-    <div id="success-message" class="success-message" style="display: none;">
-      ✅ 表单已自动填充！
-    </div>
+    <!-- Success -->
+    <div id="success-message" class="success-message" style="display: none;"></div>
 
-    <!-- 页脚 -->
+    <!-- Footer -->
     <div class="footer">
-      <p>💡 提示：在 Facebook Marketplace 创建列表页面使用此扩展</p>
+      <p>💡 Open Facebook Marketplace "Create Listing" page to use autofill</p>
     </div>
   </div>
 

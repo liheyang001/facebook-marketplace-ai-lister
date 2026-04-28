@@ -5,7 +5,8 @@
   "description": "使用 AI 快速生成 Facebook Marketplace 列表信息",
   "permissions": [
     "storage",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "https://www.facebook.com/*"

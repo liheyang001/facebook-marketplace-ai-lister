@@ -1,5 +1,5 @@
 // 常量配置
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent';
 
 // DOM 元素
 const elements = {
@@ -10,6 +10,7 @@ const elements = {
   apiKeyInput: document.getElementById('api-key'),
   toggleKeyVisibility: document.getElementById('toggle-key-visibility'),
   locationInput: document.getElementById('location'),
+  languageSelect: document.getElementById('language'),
   saveSettingsBtn: document.getElementById('save-settings'),
   settingsStatus: document.getElementById('settings-status'),
   // 状态栏
@@ -18,9 +19,7 @@ const elements = {
   // 图片相关
   selectImageBtn: document.getElementById('select-image-btn'),
   imageInput: document.getElementById('image-input'),
-  imagePreview: document.getElementById('image-preview'),
   imagePreviewContainer: document.getElementById('image-preview-container'),
-  clearImageBtn: document.getElementById('clear-image-btn'),
   analyzeBtn: document.getElementById('analyze-btn'),
   resultContainer: document.getElementById('result-container'),
   resultTitle: document.getElementById('result-title'),
@@ -37,12 +36,14 @@ const elements = {
 };
 
 // 状态变量
-let selectedImageBase64 = null;
+let selectedImages = []; // 支持多图：[{ base64, name }]
 let currentAnalysisResult = null;
+const MAX_IMAGES = 5;
 
 // ============ 初始化 ============
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
+  loadLastResult();
   setupEventListeners();
 });
 
@@ -67,7 +68,6 @@ function setupEventListeners() {
   });
 
   elements.imageInput.addEventListener('change', handleImageSelect);
-  elements.clearImageBtn.addEventListener('click', clearImage);
 
   // 分析相关
   elements.analyzeBtn.addEventListener('click', analyzeImage);
@@ -85,7 +85,7 @@ function toggleSettings() {
 
 async function loadSettings() {
   try {
-    const { apiKey = '', location = '' } = await chrome.storage.local.get(['apiKey', 'location']);
+    const { apiKey = '', location = '', language = 'en' } = await chrome.storage.local.get(['apiKey', 'location', 'language']);
 
     if (apiKey) {
       elements.apiKeyInput.value = apiKey;
@@ -100,8 +100,10 @@ async function loadSettings() {
       elements.locationInput.value = location;
       updateLocationDisplay(location);
     }
+
+    elements.languageSelect.value = language;
   } catch (error) {
-    console.error('加载设置失败:', error);
+    console.error('Failed to load settings:', error);
   }
 }
 
@@ -110,40 +112,42 @@ async function saveSettings() {
   const location = elements.locationInput.value.trim();
 
   if (!apiKey) {
-    elements.settingsStatus.textContent = '❌ 请输入 API 密钥';
+    elements.settingsStatus.textContent = '❌ Please enter your API key';
     elements.settingsStatus.style.color = '#ef4444';
     return;
   }
 
   if (!location) {
-    elements.settingsStatus.textContent = '❌ 请输入你的地区';
+    elements.settingsStatus.textContent = '❌ Please enter your region';
     elements.settingsStatus.style.color = '#ef4444';
     return;
   }
 
+  const language = elements.languageSelect.value;
+
   try {
-    await chrome.storage.local.set({ apiKey, location });
+    await chrome.storage.local.set({ apiKey, location, language });
     updateApiKeyStatus(true);
     updateLocationDisplay(location);
 
-    elements.settingsStatus.textContent = '✅ 设置已保存！';
+    elements.settingsStatus.textContent = '✅ Settings saved!';
     elements.settingsStatus.style.color = '#10b981';
 
-    // 保存成功后收起设置面板
+    // Collapse settings after save
     setTimeout(() => {
       elements.settingsBody.style.display = 'none';
       elements.settingsArrow.textContent = '▼';
       elements.settingsStatus.textContent = '';
     }, 1500);
   } catch (error) {
-    console.error('保存设置失败:', error);
-    elements.settingsStatus.textContent = '❌ 保存失败，请重试';
+    console.error('Failed to save settings:', error);
+    elements.settingsStatus.textContent = '❌ Save failed, please retry';
     elements.settingsStatus.style.color = '#ef4444';
   }
 }
 
 function updateApiKeyStatus(configured) {
-  elements.apiKeyStatus.textContent = configured ? '🔑 已配置' : '🔑 未配置';
+  elements.apiKeyStatus.textContent = configured ? '🔑 Configured' : '🔑 Not set';
   elements.apiKeyStatus.className = configured ? 'configured' : '';
 }
 
@@ -152,130 +156,204 @@ function updateLocationDisplay(location) {
   elements.locationDisplay.className = 'configured';
 }
 
-// ============ 图片处理 ============
-function handleImageSelect(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  // 验证文件类型
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    showError('请选择有效的图片格式（JPG、PNG、WebP）');
-    return;
+async function loadLastResult() {
+  try {
+    const { lastResult } = await chrome.storage.local.get('lastResult');
+    if (lastResult) {
+      currentAnalysisResult = lastResult;
+      displayResult(lastResult);
+    }
+  } catch (e) {
+    console.error('Failed to load last result:', e);
   }
-
-  // 验证文件大小（最大 5MB）
-  if (file.size > 5 * 1024 * 1024) {
-    showError('图片大小不能超过 5MB');
-    return;
-  }
-
-  // 读取并显示图片
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    selectedImageBase64 = e.target.result;
-    displayImagePreview(e.target.result);
-    elements.analyzeBtn.disabled = false;
-  };
-
-  reader.onerror = () => {
-    showError('读取图片失败，请重试');
-  };
-
-  reader.readAsDataURL(file);
 }
 
-function displayImagePreview(dataUrl) {
-  elements.imagePreview.src = dataUrl;
-  elements.imagePreviewContainer.style.display = 'block';
+// ============ 图片处理 ============
+async function handleImageSelect(event) {
+  const files = Array.from(event.target.files);
+  if (!files.length) return;
+
+  const remaining = MAX_IMAGES - selectedImages.length;
+  if (remaining <= 0) {
+    showError(`Maximum ${MAX_IMAGES} photos allowed`);
+    return;
+  }
+
+  const toAdd = files.slice(0, remaining);
+
+  for (const file of toAdd) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      showError(`${file.name} format not supported. Use JPG, PNG or WebP`);
+      continue;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showError(`${file.name} exceeds 5MB limit`);
+      continue;
+    }
+
+    const base64 = await fileToBase64(file);
+    selectedImages.push({ base64, name: file.name });
+  }
+
+  // Reset input to allow re-selecting same image
+  elements.imageInput.value = '';
+
+  renderImagePreviews();
+  elements.analyzeBtn.disabled = selectedImages.length === 0;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderImagePreviews() {
+  const container = elements.imagePreviewContainer;
+  container.innerHTML = '';
+
+  selectedImages.forEach((img, index) => {
+    const item = document.createElement('div');
+    item.className = 'preview-item';
+
+    const image = document.createElement('img');
+    image.src = img.base64;
+    image.alt = img.name;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn-remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => removeImage(index));
+
+    item.appendChild(image);
+    item.appendChild(removeBtn);
+    container.appendChild(item);
+  });
+
+  // 如果还可以Add more photos，显示 "+" 按钮
+  if (selectedImages.length < MAX_IMAGES) {
+    const addBtn = document.createElement('div');
+    addBtn.className = 'preview-add';
+    addBtn.textContent = '+';
+    addBtn.title = 'Add more photos';
+    addBtn.addEventListener('click', () => elements.imageInput.click());
+    container.appendChild(addBtn);
+  }
+
+  container.style.display = selectedImages.length > 0 ? 'grid' : 'none';
+}
+
+function removeImage(index) {
+  selectedImages.splice(index, 1);
+  renderImagePreviews();
+  elements.analyzeBtn.disabled = selectedImages.length === 0;
 }
 
 function clearImage() {
-  selectedImageBase64 = null;
+  selectedImages = [];
   elements.imageInput.value = '';
   elements.imagePreviewContainer.style.display = 'none';
+  elements.imagePreviewContainer.innerHTML = '';
   elements.analyzeBtn.disabled = true;
   hideAllContainers();
 }
 
 // ============ 图像分析 ============
 async function analyzeImage() {
-  if (!selectedImageBase64) {
-    showError('请先选择一张图片');
+  if (selectedImages.length === 0) {
+    showError('Please select at least one photo');
     return;
   }
 
   // 检查设置
-  const { apiKey = '', location = '' } = await chrome.storage.local.get(['apiKey', 'location']);
+  const { apiKey = '', location = '', language = 'en' } = await chrome.storage.local.get(['apiKey', 'location', 'language']);
   if (!apiKey) {
-    showError('请先在设置中填写 Gemini API 密钥');
+    showError('Please enter your Gemini API key in Settings');
     toggleSettings();
     return;
   }
   if (!location) {
-    showError('请先在设置中填写你的地区');
+    showError('Please enter your region in Settings');
     toggleSettings();
     return;
   }
 
-  showLoading(true);
   hideAllContainers();
+  showLoading(true);
 
   try {
-    // 调用 Gemini Vision API
-    const result = await callGeminiVisionAPI(selectedImageBase64, location, apiKey);
+    // Call Gemini Vision API (multi-image)
+    const result = await callGeminiVisionAPI(selectedImages, location, apiKey, language);
 
-    // 保存结果
+    // 保存结果（持久化）
     currentAnalysisResult = result;
+    await chrome.storage.local.set({ lastResult: result });
 
-    // 显示结果
     displayResult(result);
     showLoading(false);
   } catch (error) {
-    console.error('分析失败:', error);
+    console.error('Analysis failed:', error);
     showLoading(false);
-    showError(error.message || '分析失败，请检查 API 密钥并重试');
+    showError(error.message || 'Analysis failed. Check your API key and retry');
   }
 }
 
-async function callGeminiVisionAPI(base64Image, location, apiKey) {
-  // 提取 base64 部分（去掉 data:image/xxx;base64, 前缀）
-  const base64Data = base64Image.split(',')[1];
+const LANGUAGE_NAMES = {
+  en: 'English',
+  zh: 'Chinese (Simplified)',
+  es: 'Spanish',
+  fr: 'French',
+  ja: 'Japanese',
+  ko: 'Korean',
+};
 
-  const prompt = `你是一个 Facebook Marketplace 列表专家。请分析这张商品图片。
+async function callGeminiVisionAPI(images, location, apiKey, language = 'en') {
+  const langName = LANGUAGE_NAMES[language] || 'English';
 
-用户所在地区: ${location}
+  const prompt = `You are a Facebook Marketplace listing expert. Analyze ${images.length > 1 ? `these ${images.length} product images` : 'this product image'}.
 
-请根据商品的实际状况和该地区的市场价格，生成以下 JSON 格式的建议：
+User's region: ${location}
+Output language: ${langName}
+
+Based on the product's condition and local market prices in ${location}, generate a JSON response:
 
 {
-  "title": "吸引人的商品标题（15-85个字符）",
+  "title": "Attractive listing title (15-80 characters)",
   "priceRange": {
-    "min": 最低价格（整数）,
-    "max": 最高价格（整数）
+    "min": lowest price as integer,
+    "max": highest price as integer
   },
-  "description": ["特点或优势1", "特点或优势2", "特点或优势3", "特点或优势4"],
-  "category": "合适的Facebook分类（如Electronics, Clothing, Furniture等）"
+  "description": ["feature 1", "feature 2", "feature 3", "feature 4"],
+  "category": "Facebook Marketplace category. Must be one of: Electronics, Clothing & Accessories, Furniture, Home Sales, Garden & Outdoor, Toys & Games, Vehicles, Musical Instruments, Sporting Goods, Books, Movies & Music, Pet Supplies, Baby & Kids, Health & Beauty, Office Supplies, Tools & Home Improvement, Antiques & Collectibles, Arts & Crafts, Clothing, Bags & Shoes, Other",
+  "condition": "Must be exactly one of: New, Used - Like New, Used - Good, Used - Fair",
+  "brand": "Brand name if visible/known, or null if unknown"
 }
 
-重要：
-1. 价格要考虑${location}的实际购买力和市场情况
-2. 标题要简洁吸引人，避免过多符号
-3. 描述要突出商品特点，尤其是新旧程度
-4. 只返回 JSON，不要有其他文本`;
+Rules:
+1. Write title and description in ${langName} only
+2. Price must reflect ${location} market value
+3. Title must be concise and appealing, no excessive symbols
+4. Description should highlight condition and key features
+5. Assess condition honestly from the images
+6. Return JSON only, no other text`;
+
+  // 构建多图 parts
+  const imageParts = images.map(img => ({
+    inlineData: {
+      mimeType: 'image/jpeg',
+      data: img.base64.split(',')[1]
+    }
+  }));
 
   const requestBody = {
     contents: [
       {
         parts: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: base64Data
-            }
-          },
-          {
-            text: prompt
-          }
+          ...imageParts,
+          { text: prompt }
         ]
       }
     ]
@@ -295,7 +373,7 @@ async function callGeminiVisionAPI(base64Image, location, apiKey) {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`API 错误: ${error.error?.message || '未知错误'}`);
+      throw new Error(`API error: ${error.error?.message || "Unknown error"}`);
     }
 
     const data = await response.json();
@@ -303,26 +381,26 @@ async function callGeminiVisionAPI(base64Image, location, apiKey) {
     // 提取文本内容
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
-      throw new Error('API 没有返回有效内容');
+      throw new Error('API returned no valid content');
     }
 
     // 解析 JSON
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('无法解析 AI 返回的结果');
+      throw new Error('Failed to parse AI response');
     }
 
     const result = JSON.parse(jsonMatch[0]);
 
     // 验证结果格式
     if (!result.title || !result.priceRange || !result.description || !result.category) {
-      throw new Error('AI 返回的数据格式不完整');
+      throw new Error('AI response is missing required fields');
     }
 
     return result;
   } catch (error) {
     if (error instanceof SyntaxError) {
-      throw new Error('解析 AI 返回的结果失败');
+      throw new Error('Failed to parse AI response');
     }
     throw error;
   }
@@ -331,9 +409,11 @@ async function callGeminiVisionAPI(base64Image, location, apiKey) {
 // ============ 结果显示 ============
 function displayResult(result) {
   elements.resultTitle.textContent = result.title;
-  elements.resultPrice.textContent = `¥${result.priceRange.min} - ¥${result.priceRange.max}`;
+  elements.resultPrice.textContent = `${result.priceRange.min} - ${result.priceRange.max}`;
   elements.resultDescription.textContent = result.description.join(' • ');
-  elements.resultCategory.textContent = result.category;
+  const conditionText = result.condition || '';
+  const brandText = result.brand ? ` · Brand: ${result.brand}` : '';
+  elements.resultCategory.textContent = `${result.category} · ${conditionText}${brandText}`;
 
   elements.resultContainer.style.display = 'block';
 }
@@ -341,42 +421,61 @@ function displayResult(result) {
 // ============ 自动填充 ============
 async function autofillForm() {
   if (!currentAnalysisResult) {
-    showError('没有要填充的数据');
+    showError('No data to fill');
     return;
   }
 
   try {
-    // 发送消息到 content script
     const [tab] = await chrome.tabs.query({
-      url: 'https://www.facebook.com/marketplace/create/*'
+      url: 'https://www.facebook.com/marketplace/create/*',
+      active: true,
+      currentWindow: true
     });
 
-    if (!tab) {
-      showError('请在 Facebook Marketplace 创建列表页面使用此功能');
+    // 如果当前窗口没找到，尝试所有窗口
+    const targetTab = tab || (await chrome.tabs.query({
+      url: 'https://www.facebook.com/marketplace/create/*'
+    }))[0];
+
+    if (!targetTab) {
+      showError('Please open Facebook Marketplace Create Listing page first');
       return;
     }
 
-    // 发送填充数据到 content script
-    chrome.tabs.sendMessage(tab.id, {
+    // 确保 content script 已注入（处理扩展安装前已打开的页面）
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: targetTab.id },
+        files: ['content.js']
+      });
+    } catch (e) {
+      // 已经注入过了，忽略错误
+    }
+
+    // 短暂等待 content script 初始化
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    // 发送填充数据（包含图片）
+    chrome.tabs.sendMessage(targetTab.id, {
       action: 'autofill',
-      data: currentAnalysisResult
+      data: currentAnalysisResult,
+      images: selectedImages.map(img => img.base64)
     }, (response) => {
       if (chrome.runtime.lastError) {
-        showError('无法连接到 Facebook 页面，请刷新页面后重试');
+        showError('Cannot connect to Facebook page. Please refresh it and retry');
         return;
       }
 
       if (response?.success) {
-        showSuccess('✅ 表单已自动填充！');
-        // 2 秒后重置
+        showSuccess('✅ Form autofilled!');
         setTimeout(resetForm, 2000);
       } else {
-        showError(response?.error || '自动填充失败，请手动填充');
+        showError(response?.error || 'Autofill failed. Please fill manually');
       }
     });
   } catch (error) {
-    console.error('自动填充错误:', error);
-    showError('自动填充失败，请手动填充');
+    console.error('Autofill error:', error);
+    showError('Autofill failed: ' + error.message);
   }
 }
 
@@ -412,6 +511,7 @@ function showNotification(message) {
 function resetForm() {
   clearImage();
   currentAnalysisResult = null;
+  chrome.storage.local.remove('lastResult');
   elements.resultContainer.style.display = 'none';
   hideAllContainers();
 }
