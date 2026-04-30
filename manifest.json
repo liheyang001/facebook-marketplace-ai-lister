@@ -1,8 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Facebook Marketplace AI Lister",
+  "short_name": "AI Lister",
   "version": "1.0.0",
-  "description": "使用 AI 快速生成 Facebook Marketplace 列表信息",
+  "description": "Instantly generate Facebook Marketplace listings with AI. Upload a photo and get title, price, description, and category auto-filled.",
+  "author": "womendemiao@gmail.com",
+  "homepage_url": "https://github.com/liheyang001",
   "permissions": [
     "storage",
     "scripting",
