@@ -1,5 +1,8 @@
-// 常量配置
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+// Fill in your own Gemini free-tier key here so new users don't need to set one up.
+// When this quota runs out, the extension falls back to the user's own key.
+const BUILT_IN_API_KEY = 'AIzaSyBI5KR6xY1xMWULzgfByHb02k4eVAccJHE';
 
 // DOM 元素
 const elements = {
@@ -110,12 +113,6 @@ async function loadSettings() {
 async function saveSettings() {
   const apiKey = elements.apiKeyInput.value.trim();
   const location = elements.locationInput.value.trim();
-
-  if (!apiKey) {
-    elements.settingsStatus.textContent = '❌ Please enter your API key';
-    elements.settingsStatus.style.color = '#ef4444';
-    return;
-  }
 
   if (!location) {
     elements.settingsStatus.textContent = '❌ Please enter your region';
@@ -270,13 +267,16 @@ async function analyzeImage() {
 
   // 检查设置
   const { apiKey = '', location = '', language = 'en' } = await chrome.storage.local.get(['apiKey', 'location', 'language']);
-  if (!apiKey) {
-    showError('Please enter your Gemini API key in Settings');
+  const resolvedKey = apiKey || BUILT_IN_API_KEY;
+  const usingBuiltIn = !apiKey && !!BUILT_IN_API_KEY;
+
+  if (!resolvedKey) {
+    showError('Please add your Gemini API key in ⚙️ Settings');
     toggleSettings();
     return;
   }
   if (!location) {
-    showError('Please enter your region in Settings');
+    showError('Please enter your region in ⚙️ Settings');
     toggleSettings();
     return;
   }
@@ -285,8 +285,7 @@ async function analyzeImage() {
   showLoading(true);
 
   try {
-    // Call Gemini Vision API (multi-image)
-    const result = await callGeminiVisionAPI(selectedImages, location, apiKey, language);
+    const result = await callGeminiVisionAPI(selectedImages, location, resolvedKey, language, usingBuiltIn);
 
     // 保存结果（持久化）
     currentAnalysisResult = result;
@@ -310,7 +309,7 @@ const LANGUAGE_NAMES = {
   ko: 'Korean',
 };
 
-async function callGeminiVisionAPI(images, location, apiKey, language = 'en') {
+async function callGeminiVisionAPI(images, location, apiKey, language = 'en', usingBuiltIn = false) {
   const langName = LANGUAGE_NAMES[language] || 'English';
 
   const prompt = `You are a Facebook Marketplace listing expert. Analyze ${images.length > 1 ? `these ${images.length} product images` : 'this product image'}.
@@ -375,8 +374,14 @@ Rules:
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`API error: ${error.error?.message || "Unknown error"}`);
+      if (response.status === 429) {
+        if (usingBuiltIn) {
+          throw new Error('Free quota exhausted for today. Add your own API key in ⚙️ Settings to keep going.');
+        }
+        throw new Error('Your API quota is exhausted. Check your Google AI Studio usage limits.');
+      }
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`API error: ${error.error?.message || response.status}`);
     }
 
     const data = await response.json();
@@ -416,7 +421,8 @@ Rules:
 // ============ 结果显示 ============
 function displayResult(result) {
   elements.resultTitle.textContent = result.title;
-  elements.resultPrice.textContent = `${result.priceRange.min} - ${result.priceRange.max}`;
+  elements.resultPrice.textContent =
+    `${result.priceRange.min} – ${result.priceRange.max}  ·  Will fill: ${result.priceRange.min} (adjust after autofill)`;
   elements.resultDescription.textContent = result.description.join(' • ');
   const conditionText = result.condition || '';
   const brandText = result.brand ? ` · Brand: ${result.brand}` : '';
@@ -474,8 +480,15 @@ async function autofillForm() {
       }
 
       if (response?.success) {
-        showSuccess('✅ Form autofilled!');
-        setTimeout(resetForm, 2000);
+        const filled = response.filled?.join(', ') || 'fields';
+        const skippedNote = response.skipped?.length
+          ? `\n⚠️ Not found on page: ${response.skipped.join(', ')}`
+          : '';
+        const priceNote = response.priceRange
+          ? `\n💰 Price set to ${response.priceRange.min} — adjust if needed (range: ${response.priceRange.min}–${response.priceRange.max})`
+          : '';
+        showSuccess(`✅ Filled: ${filled}${skippedNote}${priceNote}`);
+        setTimeout(resetForm, 4000);
       } else {
         showError(response?.error || 'Autofill failed. Please fill manually');
       }

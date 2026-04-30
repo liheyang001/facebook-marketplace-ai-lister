@@ -21,18 +21,18 @@
       </div>
       <div class="settings-body" id="settings-body" style="display: none;">
         <div class="setting-item">
-          <label for="api-key">🔑 Gemini API Key:</label>
+          <label for="api-key">🔑 Gemini API Key: <span class="optional-tag">optional</span></label>
           <div class="setting-input-group">
             <input
               type="password"
               id="api-key"
-              placeholder="Enter your Gemini API key"
+              placeholder="Only needed when free quota runs out"
               class="setting-input"
             >
             <button id="toggle-key-visibility" class="btn-icon" title="Show/Hide key">👁️</button>
           </div>
           <p class="setting-hint">
-            Get free key: <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
+            Free quota included. When exhausted, get your own key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> (free)
           </p>
         </div>
 

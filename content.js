@@ -9,7 +9,12 @@ if (window.__aiListerInjected) {
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'autofill') {
       autofillForm(request.data, request.images || [])
-        .then(() => sendResponse({ success: true }))
+        .then((result) => sendResponse({
+          success: true,
+          filled: result.filled,
+          skipped: result.skipped,
+          priceRange: request.data.priceRange
+        }))
         .catch((error) => sendResponse({ success: false, error: error.message }));
       return true;
     }
@@ -21,9 +26,11 @@ if (window.__aiListerInjected) {
 // ============ 主填充流程 ============
 async function autofillForm(data, images) {
   const banner = showBanner('⏳ Filling form... Please do not touch the page.');
+  const filled = [];
+  const skipped = [];
   await sleep(500);
 
-  // 0. 上传图片
+  // 0. Upload images
   if (images.length > 0) {
     await uploadImages(images);
     await sleep(1000);
@@ -31,38 +38,43 @@ async function autofillForm(data, images) {
 
   // 1. Title
   const titleEl = findInputByLabel('Title');
-  if (titleEl) {
-    await fillReactInput(titleEl, data.title);
-    await sleep(300);
-  }
+  if (titleEl) { await fillReactInput(titleEl, data.title); filled.push('Title'); await sleep(300); }
+  else { skipped.push('Title'); }
 
   // 2. Price
   const priceEl = findInputByLabel('Price');
-  if (priceEl) {
-    await fillReactInput(priceEl, String(data.priceRange.min));
-    await sleep(300);
-  }
+  if (priceEl) { await fillReactInput(priceEl, String(data.priceRange.min)); filled.push('Price'); await sleep(300); }
+  else { skipped.push('Price'); }
 
   // 3. Category
   if (data.category) {
-    await selectDropdown('Category', data.category);
+    const ok = await selectDropdown('Category', data.category);
+    if (ok) filled.push('Category'); else skipped.push('Category');
     await sleep(600);
   }
 
   // 4. Condition
   if (data.condition) {
-    await selectDropdown('Condition', data.condition);
+    const ok = await selectDropdown('Condition', data.condition);
+    if (ok) filled.push('Condition'); else skipped.push('Condition');
     await sleep(600);
   }
 
-  // 5. More details（Description + Brand）
-  await fillMoreDetails(data);
+  // 5. More details (Description + Brand)
+  const details = await fillMoreDetails(data);
+  filled.push(...details.filled);
+  skipped.push(...details.skipped);
 
-  banner.done('✅ Form filled! Please review and submit.');
-
-  if (!titleEl && !priceEl) {
+  if (filled.length === 0) {
     throw new Error('No form fields found. Please refresh the Facebook page and retry.');
   }
+
+  const priceNote = data.priceRange
+    ? ` · Price: ${data.priceRange.min} (range ${data.priceRange.min}–${data.priceRange.max})`
+    : '';
+  banner.done(`✅ Filled: ${filled.join(', ')}${priceNote}`);
+
+  return { filled, skipped };
 }
 
 // ============ 图片上传 ============
@@ -165,13 +177,14 @@ async function selectDropdown(labelText, value) {
     if (getDropdownOptions().length > 0) { opened = true; break; }
   }
 
-  if (!opened) return;
+  if (!opened) return false;
 
   const matched = await clickMatchingOption(value);
   if (!matched) {
     document.body.click();
     await sleep(200);
   }
+  return matched;
 }
 
 function getDropdownOptions() {
@@ -217,12 +230,13 @@ async function clickMatchingOption(value) {
   return false;
 }
 
-// ============ More details（Description + Brand）============
+// ============ More details (Description + Brand) ============
 async function fillMoreDetails(data) {
+  const filled = [];
+  const skipped = [];
   const descText = Array.isArray(data.description) ? data.description.join('\n') : '';
   const brand = data.brand || null;
 
-  // 先滚动 + 尝试点击 "More details"
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   await sleep(600);
 
@@ -235,7 +249,6 @@ async function fillMoreDetails(data) {
     await sleep(800);
   }
 
-  // 填 Description
   let descEl = null;
   for (let i = 0; i < 6; i++) {
     descEl = document.querySelector('textarea') || findInputByLabel('Description');
@@ -244,17 +257,19 @@ async function fillMoreDetails(data) {
   }
   if (descEl && descText) {
     await fillReactInput(descEl, descText);
+    filled.push('Description');
     await sleep(300);
+  } else if (descText) {
+    skipped.push('Description');
   }
 
-  // 填 Brand
   if (brand) {
     const brandEl = findInputByLabel('Brand') || findInputByLabel('brand');
-    if (brandEl) {
-      await fillReactInput(brandEl, brand);
-      console.log(`✅ Filled Brand: ${brand}`);
-    }
+    if (brandEl) { await fillReactInput(brandEl, brand); filled.push('Brand'); }
+    else { skipped.push('Brand'); }
   }
+
+  return { filled, skipped };
 }
 
 // ============ React 兼容填充 ============

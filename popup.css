@@ -458,6 +458,21 @@ body {
   }
 }
 
+.optional-tag {
+  font-size: 11px;
+  font-weight: normal;
+  color: #10b981;
+  background: #ecfdf5;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.success-message {
+  white-space: pre-line;
+}
+
 .feedback-link {
   display: inline-block;
   margin-top: 8px;
