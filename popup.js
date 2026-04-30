@@ -1,8 +1,8 @@
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_MODEL = 'google/gemini-2.0-flash-exp:free';
 
-// Fill in your own Gemini free-tier key here so new users don't need to set one up.
-// When this quota runs out, the extension falls back to the user's own key.
-const BUILT_IN_API_KEY = 'AIzaSyBI5KR6xY1xMWULzgfByHb02k4eVAccJHE';
+// Built-in key for free use. Falls back to user's own key when quota runs out.
+const BUILT_IN_API_KEY = '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';
 
 // DOM 元素
 const elements = {
@@ -335,34 +335,31 @@ Rules:
 5. Assess condition honestly from the images
 6. Return JSON only, no other text`;
 
-  // 构建多图 parts
-  const imageParts = images.map(img => ({
-    inlineData: {
-      mimeType: 'image/jpeg',
-      data: img.base64.split(',')[1]
-    }
-  }));
-
   const requestBody = {
-    contents: [
-      {
-        parts: [
-          ...imageParts,
-          { text: prompt }
-        ]
-      }
-    ]
+    model: OPENROUTER_MODEL,
+    messages: [{
+      role: 'user',
+      content: [
+        ...images.map(img => ({
+          type: 'image_url',
+          image_url: { url: img.base64 }
+        })),
+        { type: 'text', text: prompt }
+      ]
+    }]
   };
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
-    const response = await fetch(GEMINI_API_URL, {
+    const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://github.com/liheyang001/facebook-marketplace-ai-lister',
+        'X-Title': 'FB Marketplace AI Lister'
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal
@@ -374,22 +371,19 @@ Rules:
       const detail = errorBody.error?.message || '';
       if (response.status === 429) {
         if (usingBuiltIn) {
-          throw new Error(`Free quota exhausted for today. Add your own API key in ⚙️ Settings to keep going.${detail ? ' (' + detail + ')' : ''}`);
+          throw new Error('Free quota exhausted for today. Add your own OpenRouter API key in ⚙️ Settings to keep going.');
         }
-        throw new Error(`API quota exhausted. Check Google AI Studio limits.${detail ? ' (' + detail + ')' : ''}`);
+        throw new Error(`API quota exhausted. Check your OpenRouter usage limits.${detail ? ' (' + detail + ')' : ''}`);
       }
       throw new Error(`API error ${response.status}: ${detail || 'unknown error'}`);
     }
 
     const data = await response.json();
-
-    // 提取文本内容
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = data.choices?.[0]?.message?.content;
     if (!text) {
       throw new Error('API returned no valid content');
     }
 
-    // 解析 JSON
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('Failed to parse AI response');
@@ -397,7 +391,6 @@ Rules:
 
     const result = JSON.parse(jsonMatch[0]);
 
-    // 验证结果格式
     if (!result.title || !result.priceRange || !result.description || !result.category) {
       throw new Error('AI response is missing required fields');
     }
