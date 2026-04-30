@@ -93,10 +93,6 @@ async function loadSettings() {
     if (apiKey) {
       elements.apiKeyInput.value = apiKey;
       updateApiKeyStatus(true);
-    } else {
-      // 如果没有 API 密钥，自动展开设置面板
-      elements.settingsBody.style.display = 'block';
-      elements.settingsArrow.textContent = '▲';
     }
 
     if (location) {
@@ -124,7 +120,7 @@ async function saveSettings() {
 
   try {
     await chrome.storage.local.set({ apiKey, location, language });
-    updateApiKeyStatus(true);
+    updateApiKeyStatus(!!apiKey);
     updateLocationDisplay(location);
 
     elements.settingsStatus.textContent = '✅ Settings saved!';
