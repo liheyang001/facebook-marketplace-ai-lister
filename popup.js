@@ -2,7 +2,7 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_MODEL = 'google/gemini-2.0-flash-exp:free';
 
 // Built-in key for free use. Falls back to user's own key when quota runs out.
-const BUILT_IN_API_KEY = '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';
+const BUILT_IN_API_KEY = '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';
 
 // DOM 元素
 const elements = {
