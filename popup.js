@@ -1,4 +1,4 @@
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 // Fill in your own Gemini free-tier key here so new users don't need to set one up.
 // When this quota runs out, the extension falls back to the user's own key.
@@ -370,14 +370,15 @@ Rules:
     clearTimeout(timeoutId);
 
     if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      const detail = errorBody.error?.message || '';
       if (response.status === 429) {
         if (usingBuiltIn) {
-          throw new Error('Free quota exhausted for today. Add your own API key in ⚙️ Settings to keep going.');
+          throw new Error(`Free quota exhausted for today. Add your own API key in ⚙️ Settings to keep going.${detail ? ' (' + detail + ')' : ''}`);
         }
-        throw new Error('Your API quota is exhausted. Check your Google AI Studio usage limits.');
+        throw new Error(`API quota exhausted. Check Google AI Studio limits.${detail ? ' (' + detail + ')' : ''}`);
       }
-      const error = await response.json().catch(() => ({}));
-      throw new Error(`API error: ${error.error?.message || response.status}`);
+      throw new Error(`API error ${response.status}: ${detail || 'unknown error'}`);
     }
 
     const data = await response.json();
