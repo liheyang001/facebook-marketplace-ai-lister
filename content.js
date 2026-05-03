@@ -48,9 +48,16 @@ async function autofillForm(data, images) {
 
   // 3. Category
   if (data.category) {
-    const ok = await selectDropdown('Category', data.category);
-    if (ok) filled.push('Category'); else skipped.push('Category');
-    await sleep(600);
+    const catLabel = Array.from(document.querySelectorAll('label')).find(l => l.textContent.trim().startsWith('Category'));
+    if (catLabel) {
+      const ok = await selectDropdown('Category', data.category);
+      if (ok) filled.push('Category'); else skipped.push('Category');
+      await sleep(600);
+      document.body.click(); // close any open dropdown
+      await sleep(200);
+    } else {
+      skipped.push('Category');
+    }
   }
 
   // 4. Condition
@@ -58,6 +65,8 @@ async function autofillForm(data, images) {
     const ok = await selectDropdown('Condition', data.condition);
     if (ok) filled.push('Condition'); else skipped.push('Condition');
     await sleep(600);
+    document.body.click();
+    await sleep(200);
   }
 
   // 5. More details (Description + Brand)
@@ -231,30 +240,48 @@ async function clickMatchingOption(value) {
 }
 
 // ============ More details (Description + Brand) ============
+function findDescriptionEl() {
+  return (
+    document.querySelector('textarea[aria-label*="escription" i]') ||
+    document.querySelector('textarea[placeholder*="escription" i]') ||
+    document.querySelector('textarea[aria-label*="escribe" i]') ||
+    document.querySelector('textarea[placeholder*="escribe" i]') ||
+    findInputByLabel('Description') ||
+    findInputByLabel('Item description') ||
+    document.querySelector('textarea')
+  );
+}
+
 async function fillMoreDetails(data) {
   const filled = [];
   const skipped = [];
   const descText = Array.isArray(data.description) ? data.description.join('\n') : '';
   const brand = data.brand || null;
 
-  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-  await sleep(600);
+  // Try to find description on the main form first (no click needed)
+  let descEl = findDescriptionEl();
 
-  const moreBtn = Array.from(
-    document.querySelectorAll('[role="button"],button,div,span')
-  ).find(el => /more detail/i.test(el.textContent.trim()) && el.children.length < 5);
+  if (!descEl) {
+    // Scroll down and try "More details" button
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    await sleep(600);
 
-  if (moreBtn) {
-    moreBtn.click();
-    await sleep(800);
+    const moreBtn = Array.from(
+      document.querySelectorAll('[role="button"],button,div,span')
+    ).find(el => /more detail/i.test(el.textContent.trim()) && el.children.length < 5);
+
+    if (moreBtn) {
+      moreBtn.click();
+      await sleep(800);
+    }
+
+    for (let i = 0; i < 4; i++) {
+      descEl = findDescriptionEl();
+      if (descEl) break;
+      await sleep(400);
+    }
   }
 
-  let descEl = null;
-  for (let i = 0; i < 6; i++) {
-    descEl = document.querySelector('textarea') || findInputByLabel('Description');
-    if (descEl) break;
-    await sleep(400);
-  }
   if (descEl && descText) {
     await fillReactInput(descEl, descText);
     filled.push('Description');
