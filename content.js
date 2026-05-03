@@ -1,25 +1,23 @@
 // Content Script - Facebook Marketplace AI Lister
 
-// 防止重复注入时执行多次
-if (window.__aiListerInjected) {
-  // 已注入，只更新消息监听器
-} else {
+// Always register a fresh listener. After extension reload the old runtime context is
+// invalidated, so re-injection must add a new listener regardless of prior injections.
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'autofill') {
+    autofillForm(request.data, request.images || [], request.preferences || {})
+      .then((result) => sendResponse({
+        success: true,
+        filled: result.filled,
+        skipped: result.skipped,
+        priceRange: request.data.priceRange
+      }))
+      .catch((error) => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+});
+
+if (!window.__aiListerInjected) {
   window.__aiListerInjected = true;
-
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'autofill') {
-      autofillForm(request.data, request.images || [], request.preferences || {})
-        .then((result) => sendResponse({
-          success: true,
-          filled: result.filled,
-          skipped: result.skipped,
-          priceRange: request.data.priceRange
-        }))
-        .catch((error) => sendResponse({ success: false, error: error.message }));
-      return true;
-    }
-  });
-
   console.log('🚀 AI Lister content script ready');
 }
 
@@ -365,7 +363,6 @@ async function fillPreferences(prefs, filled, skipped) {
     const allCheckboxes = Array.from(document.querySelectorAll(
       '[role="checkbox"],[role="switch"],input[type="checkbox"]'
     ));
-      allCheckboxes.map(e => e.getAttribute('aria-label') || e.parentElement?.textContent?.trim()?.substring(0, 40)));
 
     const el = allCheckboxes.find(e => {
       const search = labelText.toLowerCase();

@@ -452,8 +452,8 @@ async function autofillForm() {
       // 已经注入过了，忽略错误
     }
 
-    // 短暂等待 content script 初始化
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // Wait for the freshly injected listener to become active
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     const { meetupPublic = false, meetupPickup = false, meetupDropoff = false, hideFromFriends = false } =
       await chrome.storage.local.get(['meetupPublic', 'meetupPickup', 'meetupDropoff', 'hideFromFriends']);
