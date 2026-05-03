@@ -1,4 +1,4 @@
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // Built-in key for free use. Repo is private so this is safe to commit.
 const BUILT_IN_API_KEY = 'AIzaSyDzkyPoOeagmGF3GaeXEw6pDYoRy2yvSeg';
