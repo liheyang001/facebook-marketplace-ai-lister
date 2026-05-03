@@ -1,7 +1,8 @@
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+// Your Cloudflare Worker URL — paste it here after deploying
+const WORKER_URL = 'https://fb-marketing-ai.womendemiao.workers.dev';
 
-// Built-in key for free use. Repo is private so this is safe to commit.
-const BUILT_IN_API_KEY = 'AIzaSyDzkyPoOeagmGF3GaeXEw6pDYoRy2yvSeg';
+// Shared secret — must match EXTENSION_SECRET env var in your Worker
+const EXTENSION_SECRET = 'myfbext2025abc';
 
 // DOM 元素
 const elements = {
@@ -13,11 +14,14 @@ const elements = {
   toggleKeyVisibility: document.getElementById('toggle-key-visibility'),
   locationInput: document.getElementById('location'),
   languageSelect: document.getElementById('language'),
+  meetupPublic: document.getElementById('meetup-public'),
+  meetupPickup: document.getElementById('meetup-pickup'),
+  meetupDropoff: document.getElementById('meetup-dropoff'),
+  hideFromFriends: document.getElementById('hide-from-friends'),
   saveSettingsBtn: document.getElementById('save-settings'),
   settingsStatus: document.getElementById('settings-status'),
   // 状态栏
   locationDisplay: document.getElementById('location-display'),
-  apiKeyStatus: document.getElementById('api-key-status'),
   // 图片相关
   selectImageBtn: document.getElementById('select-image-btn'),
   imageInput: document.getElementById('image-input'),
@@ -87,12 +91,9 @@ function toggleSettings() {
 
 async function loadSettings() {
   try {
-    const { apiKey = '', location = '', language = 'en' } = await chrome.storage.local.get(['apiKey', 'location', 'language']);
+    const { apiKey = '', location = '', language = 'en', meetupPublic = false, meetupPickup = false, meetupDropoff = false, hideFromFriends = false } = await chrome.storage.local.get(['apiKey', 'location', 'language', 'meetupPublic', 'meetupPickup', 'meetupDropoff', 'hideFromFriends']);
 
-    if (apiKey) {
-      elements.apiKeyInput.value = apiKey;
-      updateApiKeyStatus(true);
-    }
+    if (apiKey) elements.apiKeyInput.value = apiKey;
 
     if (location) {
       elements.locationInput.value = location;
@@ -100,6 +101,10 @@ async function loadSettings() {
     }
 
     elements.languageSelect.value = language;
+    elements.meetupPublic.checked = meetupPublic;
+    elements.meetupPickup.checked = meetupPickup;
+    elements.meetupDropoff.checked = meetupDropoff;
+    elements.hideFromFriends.checked = hideFromFriends;
   } catch (error) {
     console.error('Failed to load settings:', error);
   }
@@ -116,10 +121,13 @@ async function saveSettings() {
   }
 
   const language = elements.languageSelect.value;
+  const meetupPublic = elements.meetupPublic.checked;
+  const meetupPickup = elements.meetupPickup.checked;
+  const meetupDropoff = elements.meetupDropoff.checked;
+  const hideFromFriends = elements.hideFromFriends.checked;
 
   try {
-    await chrome.storage.local.set({ apiKey, location, language });
-    updateApiKeyStatus(!!apiKey);
+    await chrome.storage.local.set({ apiKey, location, language, meetupPublic, meetupPickup, meetupDropoff, hideFromFriends });
     updateLocationDisplay(location);
 
     elements.settingsStatus.textContent = '✅ Settings saved!';
@@ -138,10 +146,6 @@ async function saveSettings() {
   }
 }
 
-function updateApiKeyStatus(configured) {
-  elements.apiKeyStatus.textContent = configured ? '🔑 Configured' : '🔑 Not set';
-  elements.apiKeyStatus.className = configured ? 'configured' : '';
-}
 
 function updateLocationDisplay(location) {
   elements.locationDisplay.textContent = `📍 ${location}`;
@@ -262,14 +266,7 @@ async function analyzeImage() {
 
   // 检查设置
   const { apiKey = '', location = '', language = 'en' } = await chrome.storage.local.get(['apiKey', 'location', 'language']);
-  const resolvedKey = apiKey || BUILT_IN_API_KEY;
-  const usingBuiltIn = !apiKey && !!BUILT_IN_API_KEY;
 
-  if (!resolvedKey) {
-    showError('Please add your Gemini API key in ⚙️ Settings');
-    toggleSettings();
-    return;
-  }
   if (!location) {
     showError('Please enter your region in ⚙️ Settings');
     toggleSettings();
@@ -280,7 +277,7 @@ async function analyzeImage() {
   showLoading(true);
 
   try {
-    const result = await callGeminiVisionAPI(selectedImages, location, resolvedKey, language, usingBuiltIn);
+    const result = await callGeminiVisionAPI(selectedImages, location, language, apiKey);
 
     // 保存结果（持久化）
     currentAnalysisResult = result;
@@ -304,7 +301,7 @@ const LANGUAGE_NAMES = {
   ko: 'Korean',
 };
 
-async function callGeminiVisionAPI(images, location, apiKey, language = 'en', usingBuiltIn = false) {
+async function callGeminiVisionAPI(images, location, language = 'en', userApiKey = '') {
   const langName = LANGUAGE_NAMES[language] || 'English';
 
   const prompt = `You are a Facebook Marketplace listing expert. Analyze ${images.length > 1 ? `these ${images.length} product images` : 'this product image'}.
@@ -320,8 +317,8 @@ Based on the product's condition and local market prices in ${location}, generat
     "min": lowest price as integer,
     "max": highest price as integer
   },
-  "description": ["feature 1", "feature 2", "feature 3", "feature 4"],
-  "category": "Facebook Marketplace category. Must be one of: Electronics, Clothing & Accessories, Furniture, Home Sales, Garden & Outdoor, Toys & Games, Vehicles, Musical Instruments, Sporting Goods, Books, Movies & Music, Pet Supplies, Baby & Kids, Health & Beauty, Office Supplies, Tools & Home Improvement, Antiques & Collectibles, Arts & Crafts, Clothing, Bags & Shoes, Other",
+  "description": "1-2 sentence description of the item's condition and key features",
+  "category": "Facebook Marketplace category. Must be exactly one of: Tools, Furniture, Household, Garden, Appliances, Video Games, Books, films & music, Bags & luggage, Women's clothing & shoes, Men's clothing & shoes, Jewellery and accessories, Health & beauty, Pet supplies, Baby & children, Toys and games, Electronics & computers, Mobile phones, Bicycles, Arts & crafts, Sport and outdoors, Car parts, Musical Instruments, Antiques and collectibles, Garage sale, Miscellaneous. If unsure, use Miscellaneous.",
   "condition": "Must be exactly one of: New, Used - Like New, Used - Good, Used - Fair",
   "brand": "Brand name if visible/known, or null if unknown"
 }
@@ -352,12 +349,18 @@ Rules:
   const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
-    const response = await fetch(GEMINI_API_URL, {
+    // Use own key directly if provided, otherwise go through Worker
+    const useOwnKey = !!userApiKey;
+    const url = useOwnKey
+      ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+      : WORKER_URL;
+    const headers = useOwnKey
+      ? { 'Content-Type': 'application/json', 'x-goog-api-key': userApiKey }
+      : { 'Content-Type': 'application/json', 'X-Extension-Secret': EXTENSION_SECRET };
+
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
+      headers,
       body: JSON.stringify(requestBody),
       signal: controller.signal
     });
@@ -407,7 +410,7 @@ function displayResult(result) {
   elements.resultTitle.textContent = result.title;
   elements.resultPrice.textContent =
     `${result.priceRange.min} – ${result.priceRange.max}  ·  Will fill: ${result.priceRange.min} (adjust after autofill)`;
-  elements.resultDescription.textContent = result.description.join(' • ');
+  elements.resultDescription.textContent = Array.isArray(result.description) ? result.description.join(' • ') : result.description;
   const conditionText = result.condition || '';
   const brandText = result.brand ? ` · Brand: ${result.brand}` : '';
   elements.resultCategory.textContent = `${result.category} · ${conditionText}${brandText}`;
@@ -452,11 +455,15 @@ async function autofillForm() {
     // 短暂等待 content script 初始化
     await new Promise(resolve => setTimeout(resolve, 200));
 
+    const { meetupPublic = false, meetupPickup = false, meetupDropoff = false, hideFromFriends = false } =
+      await chrome.storage.local.get(['meetupPublic', 'meetupPickup', 'meetupDropoff', 'hideFromFriends']);
+
     // 发送填充数据（包含图片）
     chrome.tabs.sendMessage(targetTab.id, {
       action: 'autofill',
       data: currentAnalysisResult,
-      images: selectedImages.map(img => img.base64)
+      images: selectedImages.map(img => img.base64),
+      preferences: { meetupPublic, meetupPickup, meetupDropoff, hideFromFriends }
     }, (response) => {
       if (chrome.runtime.lastError) {
         showError('Cannot connect to Facebook page. Please refresh it and retry');

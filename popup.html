@@ -21,19 +21,12 @@
       </div>
       <div class="settings-body" id="settings-body" style="display: none;">
         <div class="setting-item">
-          <label for="api-key">🔑 Gemini API Key:</label>
+          <label for="api-key">🔑 Gemini API Key <span style="font-weight:400;color:#6b7280">(optional — uses shared key if empty)</span>:</label>
           <div class="setting-input-group">
-            <input
-              type="password"
-              id="api-key"
-              placeholder="Enter your Gemini API key"
-              class="setting-input"
-            >
+            <input type="password" id="api-key" placeholder="Enter your own Gemini API key" class="setting-input">
             <button id="toggle-key-visibility" class="btn-icon" title="Show/Hide key">👁️</button>
           </div>
-          <p class="setting-hint">
-            Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> (no billing required)
-          </p>
+          <p class="setting-hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a></p>
         </div>
 
         <div class="setting-item">
@@ -60,6 +53,21 @@
               <option value="ko">Korean (한국어)</option>
             </select>
           </div>
+        </div>
+
+        <div class="setting-item">
+          <label>🤝 Meetup Preferences:</label>
+          <div class="setting-checkboxes">
+            <label class="checkbox-label"><input type="checkbox" id="meetup-public"> Public meetup</label>
+            <label class="checkbox-label"><input type="checkbox" id="meetup-pickup"> Door pick-up</label>
+            <label class="checkbox-label"><input type="checkbox" id="meetup-dropoff"> Door drop-off</label>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="checkbox-label">
+            <input type="checkbox" id="hide-from-friends"> 🙈 Hide from friends
+          </label>
         </div>
 
         <button id="save-settings" class="btn-primary">💾 Save Settings</button>
