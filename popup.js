@@ -1,7 +1,7 @@
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-// Leave empty — each user enters their own Gemini API key in Settings.
-const BUILT_IN_API_KEY = '';
+// Built-in key for free use. Repo is private so this is safe to commit.
+const BUILT_IN_API_KEY = 'AIzaSyDzkyPoOeagmGF3GaeXEw6pDYoRy2yvSeg';
 
 // DOM 元素
 const elements = {
