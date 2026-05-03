@@ -206,7 +206,6 @@ async function selectDropdown(labelText, value, fallback = null) {
   add(labelEl);
 
   for (const el of candidates) {
-    console.log(`🎯 "${labelText}" trying:`, el.tagName, el.getAttribute('role'), el.textContent.trim().substring(0, 30));
 
     // Snapshot before click so we can find what newly appeared
     const prevOpts = new Set(document.querySelectorAll('[role="option"],[role="menuitem"],[role="radio"]'));
@@ -219,7 +218,6 @@ async function selectDropdown(labelText, value, fallback = null) {
     const newStdOpts = Array.from(document.querySelectorAll('[role="option"],[role="menuitem"],[role="radio"]'))
       .filter(o => !prevOpts.has(o));
     if (newStdOpts.length > 0) {
-      console.log('📋 New std options:', newStdOpts.slice(0, 5).map(o => o.textContent.trim().substring(0, 30)));
       return await clickMatchingOption(value, fallback, newStdOpts);
     }
 
@@ -231,7 +229,6 @@ async function selectDropdown(labelText, value, fallback = null) {
         newDialog.querySelectorAll('[role="option"],[role="menuitem"],[role="button"],[role="gridcell"],li,[tabindex="0"]')
       ).filter(o => o.textContent.trim().length > 0);
       if (dialogOpts.length > 0) {
-        console.log('📋 New dialog options:', dialogOpts.slice(0, 5).map(o => o.textContent.trim().substring(0, 30)));
         return await clickMatchingOption(value, fallback, dialogOpts);
       }
     }
@@ -287,7 +284,6 @@ async function clickMatchingOption(value, fallback = null, opts = null) {
 
   // Try fallback within the same set of options (dialog still open)
   if (fallback && fallback.toLowerCase() !== valueLower) {
-    console.log(`⚠️ "${value}" not found, falling back to: ${fallback}`);
     return clickMatchingOption(fallback, null, opts);
   }
 
@@ -360,7 +356,6 @@ async function fillMoreDetails(data) {
 // ============ Preferences (Meetup + Hide from friends) ============
 async function fillPreferences(prefs, filled, skipped) {
   if (!prefs || Object.keys(prefs).length === 0) return;
-  console.log('🔧 fillPreferences called with:', prefs);
 
   // Scroll to bottom so these elements are in the DOM
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
@@ -370,7 +365,6 @@ async function fillPreferences(prefs, filled, skipped) {
     const allCheckboxes = Array.from(document.querySelectorAll(
       '[role="checkbox"],[role="switch"],input[type="checkbox"]'
     ));
-    console.log(`🔍 Looking for "${labelText}", all checkboxes:`, allCheckboxes.length,
       allCheckboxes.map(e => e.getAttribute('aria-label') || e.parentElement?.textContent?.trim()?.substring(0, 40)));
 
     const el = allCheckboxes.find(e => {
@@ -403,7 +397,6 @@ async function fillPreferences(prefs, filled, skipped) {
       e.closest('[aria-checked]')?.getAttribute('aria-checked') === 'true';
 
     const isChecked = getChecked(el);
-    console.log(`☑️ "${labelText}" found (${el.tagName} role=${el.getAttribute('role')}), isChecked=${isChecked}, shouldBe=${shouldBeChecked}`);
 
     if (isChecked !== shouldBeChecked) {
       // Try clicking the element itself; if it's inside a label, click that
@@ -413,7 +406,6 @@ async function fillPreferences(prefs, filled, skipped) {
       clickTarget.dispatchEvent(new MouseEvent('click',     { bubbles: true, cancelable: true }));
       await sleep(400);
       const afterChecked = getChecked(el);
-      console.log(`☑️ After click, isChecked=${afterChecked}`);
     }
     return true;
   };

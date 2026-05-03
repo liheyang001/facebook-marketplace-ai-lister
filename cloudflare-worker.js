@@ -27,6 +27,15 @@ export default {
       return new Response('Unauthorized', { status: 401 });
     }
 
+    // Rate limit: max 20 requests per IP per day
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const rateLimitKey = `rl:${ip}:${new Date().toISOString().slice(0, 10)}`;
+    const current = parseInt(await env.RATE_LIMIT.get(rateLimitKey) || '0');
+    if (current >= 20) {
+      return new Response('Rate limit exceeded (20/day per IP)', { status: 429 });
+    }
+    await env.RATE_LIMIT.put(rateLimitKey, String(current + 1), { expirationTtl: 86400 });
+
     let body;
     try {
       body = await request.json();
