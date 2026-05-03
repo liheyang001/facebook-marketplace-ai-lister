@@ -1,8 +1,7 @@
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const OPENROUTER_MODEL = 'google/gemini-2.0-flash-exp:free';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-// Built-in key for free use. Falls back to user's own key when quota runs out.
-const BUILT_IN_API_KEY = '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';
+// Leave empty — each user enters their own Gemini API key in Settings.
+const BUILT_IN_API_KEY = '';
 
 // DOM 元素
 const elements = {
@@ -336,15 +335,15 @@ Rules:
 6. Return JSON only, no other text`;
 
   const requestBody = {
-    model: OPENROUTER_MODEL,
-    messages: [{
-      role: 'user',
-      content: [
+    contents: [{
+      parts: [
         ...images.map(img => ({
-          type: 'image_url',
-          image_url: { url: img.base64 }
+          inlineData: {
+            mimeType: img.base64.split(';')[0].split(':')[1] || 'image/jpeg',
+            data: img.base64.split(',')[1]
+          }
         })),
-        { type: 'text', text: prompt }
+        { text: prompt }
       ]
     }]
   };
@@ -353,13 +352,11 @@ Rules:
   const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
-    const response = await fetch(OPENROUTER_API_URL, {
+    const response = await fetch(GEMINI_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://github.com/liheyang001/facebook-marketplace-ai-lister',
-        'X-Title': 'FB Marketplace AI Lister'
+        'x-goog-api-key': apiKey
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal
@@ -370,16 +367,13 @@ Rules:
       const errorBody = await response.json().catch(() => ({}));
       const detail = errorBody.error?.message || '';
       if (response.status === 429) {
-        if (usingBuiltIn) {
-          throw new Error('Free quota exhausted for today. Add your own OpenRouter API key in ⚙️ Settings to keep going.');
-        }
-        throw new Error(`API quota exhausted. Check your OpenRouter usage limits.${detail ? ' (' + detail + ')' : ''}`);
+        throw new Error(`Quota exhausted. Check your Google AI Studio limits.${detail ? ' (' + detail + ')' : ''}`);
       }
       throw new Error(`API error ${response.status}: ${detail || 'unknown error'}`);
     }
 
     const data = await response.json();
-    const text = data.choices?.[0]?.message?.content;
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
       throw new Error('API returned no valid content');
     }
