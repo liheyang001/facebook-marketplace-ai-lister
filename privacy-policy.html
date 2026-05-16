@@ -33,7 +33,9 @@
   </ul>
 
   <h2>3. Third-Party Services</h2>
-  <p>Product images and your region/language are sent to <strong>Google Gemini API</strong> to generate listing suggestions. Please review <a href="https://policies.google.com/privacy" target="_blank">Google's Privacy Policy</a> for how they handle API data.</p>
+  <p>When you analyze a product, your images and region/language preference are sent to <strong>Google Gemini API</strong> via a <strong>Cloudflare Worker proxy</strong> operated by the developer. The proxy forwards your request to Gemini and returns the result — it does not log or store your images or any personal data.</p>
+  <p>If you provide your own Gemini API key in Settings, your request is sent directly to Google without passing through our proxy.</p>
+  <p>Please review <a href="https://policies.google.com/privacy" target="_blank">Google's Privacy Policy</a> and <a href="https://www.cloudflare.com/privacypolicy/" target="_blank">Cloudflare's Privacy Policy</a> for how they handle data.</p>
 
   <h2>4. Permissions Explained</h2>
   <ul>
@@ -41,6 +43,7 @@
     <li><strong>scripting</strong> – Injects the autofill script into Facebook Marketplace listing pages.</li>
     <li><strong>tabs</strong> – Identifies the active Facebook Marketplace tab to send autofill data.</li>
     <li><strong>host_permissions (facebook.com)</strong> – Required to run the autofill content script on Facebook pages.</li>
+    <li><strong>host_permissions (workers.dev, googleapis.com)</strong> – Required to call the Cloudflare Worker proxy and Google Gemini API.</li>
   </ul>
 
   <h2>5. Data Retention</h2>
