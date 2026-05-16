@@ -1,147 +1,128 @@
 # 🤖 Facebook Marketplace AI Lister
 
-使用 Google Gemini Vision AI 快速为 Facebook Marketplace 生成商品列表信息。
+A Chrome extension that uses Google Gemini Vision AI to instantly generate and auto-fill Facebook Marketplace listings from product photos.
 
-## ✨ 功能
-
-- 📸 **智能图像分析**：上传商品图片，AI 自动分析
-- 🏷️ **自动生成标题**：根据商品内容生成吸引人的标题
-- 💰 **智能定价**：根据商品状况和地区生成合理的价格范围
-- 📝 **详细描述**：AI 生成商品的关键特点和优势
-- 🏪 **自动分类**：推荐合适的 Facebook 分类
-- 🌍 **地区感知**：根据你所在地区调整价格建议
-- ⚡ **一键填充**：自动填充 Facebook Marketplace 表单
-
-## 🚀 快速开始
-
-### 1️⃣ 下载和安装
-
-```bash
-1. 解压项目文件夹
-2. 打开 Chrome 浏览器
-3. 访问 chrome://extensions
-4. 右上角打开"开发者模式"
-5. 点击"加载解包项目"
-6. 选择解压的项目文件夹
-7. 完成！
-```
-
-### 2️⃣ 使用步骤
-
-```
-1. 点击 Chrome 扩展栏中的"AI Marketplace Lister"图标
-2. 第一次使用时，输入你的城市/地区（如"北京"、"上海"）
-3. 点击"选择图片"按钮，上传商品图片
-4. 点击"🔍 分析商品"按钮
-5. 等待 AI 分析（通常 2-5 秒）
-6. 在 Facebook Marketplace 创建列表页面点击"✅ 自动填充表单"
-7. 完成！表单已自动填充
-```
-
-## 📦 文件结构
-
-```
-facebook-marketplace-ai-lister/
-├── manifest.json              # Chrome 扩展配置
-├── popup.html                 # 扩展弹窗 UI
-├── popup.css                  # 弹窗样式
-├── popup.js                   # 弹窗逻辑
-├── content.js                 # 注入到 Facebook 的脚本
-├── content.css                # 内容脚本样式
-├── background.js              # Service Worker 后台脚本
-├── README.md                  # 本文件
-└── assets/                    # 图标（可选）
-    ├── icon-16.png
-    ├── icon-48.png
-    └── icon-128.png
-```
-
-## 🔧 配置
-
-### API 密钥
-API 密钥已配置在 `popup.js` 中，无需手动设置。
-
-### 修改地址
-在扩展弹窗中点击"保存"按钮即可更改地址。
-
-## 📋 系统要求
-
-- **Chrome/Edge 版本 110+**（需要 Manifest V3 支持）
-- **互联网连接**（调用 Gemini API）
-- **Facebook 账户**（用于 Marketplace）
-
-## ⚙️ 工作原理
-
-```
-1. 用户上传图片
-   ↓
-2. 扩展将图片转换为 Base64
-   ↓
-3. 发送到 Google Gemini Vision API
-   ↓
-4. AI 分析商品和市场价格
-   ↓
-5. 返回 JSON 格式的建议（标题、价格、描述、类别）
-   ↓
-6. 用户点击"自动填充"
-   ↓
-7. Content Script 注入 Facebook 页面并填充表单
-```
-
-## 🎯 已完成功能（Sprint 1）
-
-- ✅ Chrome 扩展 Manifest V3 配置
-- ✅ 弹窗 UI 设计（图片选择、地址设置）
-- ✅ Gemini Vision API 集成
-- ✅ 地区感知的价格建议
-- ✅ Content Script 注入和表单自动填充
-- ✅ 加载和错误提示
-
-## ⚠️ 已知限制
-
-1. **免费配额限制**：Gemini API 免费账户每天限 15 个请求
-2. **Facebook DOM 变化**：如果 Facebook 改变了表单结构，可能需要更新选择器
-3. **图片大小**：最大支持 5MB 图片
-4. **浏览器支持**：仅支持 Chrome/Edge（需要 Manifest V3）
-
-## 🐛 故障排除
-
-### 问题：扩展不加载
-**解决**：检查 Chrome 版本是否 110+，在 `chrome://extensions` 中查看错误信息
-
-### 问题：分析失败 / API 错误
-**解决**：
-- 确保网络连接正常
-- 检查是否超过了免费配额（每天 15 个请求）
-- 刷新页面后重试
-
-### 问题：自动填充不工作
-**解决**：
-- 确保在 `https://www.facebook.com/marketplace/create/*` 页面使用
-- 刷新 Facebook 页面后重试
-- 检查浏览器控制台（F12）是否有错误信息
-
-### 问题：找不到表单字段
-**解决**：
-- Facebook 可能改变了 DOM 结构
-- 可以手动检查浏览器开发工具中的 aria-label 属性
-- 联系开发者更新选择器
-
-## 📞 支持
-
-如有问题或建议，请提交 issue 或联系开发者。
-
-## 📜 隐私政策
-
-- 所有数据都发送到 Google Gemini API（第三方服务）
-- 本地存储：仅存储用户的地址和 API 密钥
-- 我们不收集、存储或分享用户的商品信息或图片
-- 所有处理都在用户浏览器内进行
-
-## 📄 许可证
-
-MIT License
+**Upload a photo → Get AI-generated title, price, description & category → Auto-fill the form in one click.**
 
 ---
 
-**祝你销售愉快！** 🎉
+## ✨ Features
+
+- 📸 **Multi-image analysis** — Upload up to 5 photos for better accuracy
+- 🏷️ **Smart title generation** — Concise, appealing titles tailored to your market
+- 💰 **Price suggestions** — Realistic price ranges based on your region
+- 📝 **Auto description** — Highlights condition and key features
+- 🏪 **Category detection** — Automatically picks the right Facebook category
+- ✅ **One-click autofill** — Fills the entire listing form instantly
+- 🤝 **Meetup preferences** — Sets public meetup, door pick-up, drop-off options
+- 🙈 **Hide from friends** — Configurable per your preference
+- 🌍 **Multi-language** — English, Chinese, Spanish, French, Japanese, Korean
+- 🔑 **No API key required** — Works out of the box with a shared key
+
+---
+
+## 🚀 Getting Started
+
+### Install (Developer Mode)
+
+1. Download or clone this repository
+2. Open Chrome and go to `chrome://extensions`
+3. Enable **Developer mode** (top right toggle)
+4. Click **Load unpacked** and select the project folder
+5. The extension icon appears in your toolbar — you're ready!
+
+### First-time Setup
+
+1. Click the extension icon
+2. Open **⚙️ Settings**
+3. Enter your **city or region** (e.g. `Sydney`, `New York`, `London`)
+4. Optionally set your **meetup preferences** and **hide from friends**
+5. Click **Save Settings**
+
+### Using the Extension
+
+1. Go to [Facebook Marketplace → Create Listing](https://www.facebook.com/marketplace/create/)
+2. Click the extension icon and select your product photos
+3. Click **🔍 Analyze Product** and wait 3–5 seconds
+4. Review the AI-generated listing details
+5. Click **✅ Autofill Form** — done!
+
+---
+
+## 🔑 API Key
+
+The extension works out of the box using a shared Gemini API key (limited to 20 analyses/day per IP).
+
+If you hit the limit, get your own **free** key from [Google AI Studio](https://aistudio.google.com/apikey) and paste it into Settings — no billing required.
+
+---
+
+## 🌐 How It Works
+
+```
+User uploads photo(s)
+        ↓
+Extension sends image to Cloudflare Worker proxy
+        ↓
+Worker calls Google Gemini Vision API
+        ↓
+AI returns: title, price range, description, category, condition, brand
+        ↓
+User clicks Autofill
+        ↓
+Content script fills the Facebook Marketplace form
+```
+
+---
+
+## ⚙️ Settings
+
+| Setting | Description |
+|---|---|
+| Gemini API Key | Your own key (optional, overrides shared key) |
+| Region | Your city/region for accurate pricing |
+| Language | Output language for title & description |
+| Public meetup | Auto-check "Public meetup" on listings |
+| Door pick-up | Auto-check "Door pick-up" |
+| Door drop-off | Auto-check "Door drop-off" |
+| Hide from friends | Auto-toggle "Hide from friends" |
+
+---
+
+## 📋 Requirements
+
+- Chrome or Edge 110+
+- Internet connection
+- A Facebook account with Marketplace access
+
+---
+
+## 🐛 Troubleshooting
+
+**Autofill doesn't work**
+→ Make sure you're on `facebook.com/marketplace/create/` and refresh the page before trying again.
+
+**Analysis fails / API error**
+→ Check your internet connection. If using the shared key, you may have hit the daily limit — add your own free key in Settings.
+
+**Fields not filled**
+→ Facebook occasionally changes their page structure. Refresh the page and retry. If the issue persists, open a GitHub issue.
+
+---
+
+## 🔒 Privacy
+
+- Photos are sent to Google Gemini API for analysis and are not stored
+- Your region and preferences are saved locally in your browser only
+- No personal data is collected or shared by this extension
+- See [Privacy Policy](privacy-policy.html) for details
+
+---
+
+## 📄 License
+
+MIT License — free to use, modify, and distribute.
+
+---
+
+*Happy selling!* 🎉
